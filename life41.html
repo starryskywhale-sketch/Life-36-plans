@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Life 41 | 九日一循環</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root { --bg-deep: #F0F2F5; --success-green: #C8E6C9; --accent: #4CAF50; --m-yellow: #FFF9C4; --base-font-size: 100%; }
+        body { background-color: var(--bg-deep); color: #37474F; font-family: sans-serif; overflow-x: hidden; }
+        .active-tab { color: var(--accent); font-weight: bold; position: relative; }
+        .active-tab::after { content: ''; position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%); width: 6px; height: 6px; background: var(--accent); border-radius: 50%; }
+        .hidden { display: none; }
+        .card { background: #FFFFFF; border-radius: 2rem; box-shadow: 0 10px 30px rgba(0,0,0,0.06); border: 1px solid rgba(255,255,255,0.5); }
+        .board-viewport { width: 100vw; margin-left: calc(-50vw + 50%); overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; -ms-overflow-style: none; scrollbar-width: none; display: flex; align-items: center; }
+        .board-viewport::-webkit-scrollbar { display: none; }
+        .board-track { display: inline-flex; padding: 40px calc(50vw - 155px); }
+        .board-card { scroll-snap-align: center; min-width: 280px; width: 280px; margin: 0 15px; transition: transform 0.3s; }
+        .today-highlight { background-color: var(--m-yellow) !important; border: 2px solid #FBC02D !important; }
+        .board-item-done { background-color: var(--success-green) !important; color: #2E7D32 !important; font-weight: bold; position: relative; }
+        .board-item-done::after { content: '✓'; position: absolute; right: 8px; }
+		.nav-arrow { position: fixed; top: 55%; /* 稍微下移，避開標題區 */ transform: translateY(-50%); background: white; width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 100; cursor: pointer; border: 1px solid rgba(0,0,0,0.05); color: #90A4AE; transition: all 0.2s; }
+        .nav-arrow:active { scale: 0.9; }
+        .arrow-left { left: 10px; }  /* 強制固定在左側 */
+        .arrow-right { right: 10px; } /* 強制固定在右側 */
+        /* 確保在小螢幕上按鈕不會太突兀 */
+        @media (min-width: 768px) {
+            .arrow-left { left: 40px; }
+            .arrow-right { right: 40px; }
+        }
+		html { font-size: var(--base-font-size); }
+		/* 按鈕點選後的樣式 */
+		.font-btn-active {
+			background-color: var(--accent) !important;
+			color: white !important;
+			border-color: var(--accent) !important;
+		}
+    </style>
+</head>
+<body class="p-4 md:p-8 pb-40">
+
+    <div class="max-w-4xl mx-auto">
+        <div class="flex justify-between items-start mb-10 px-4">
+            <div>
+                <h1 class="text-xl font-light tracking-[0.4em] text-slate-400">LIFE 41</h1>
+                <p class="text-[10px] text-slate-400/70 tracking-[0.2em] font-medium mt-2">每一個九日都是全新的開始</p>
+            </div>
+            <div class="flex flex-col items-end max-w-[180px]">
+                <div class="flex gap-2 mb-3">
+                    <button onclick="exportData()" class="text-[10px] bg-white px-3 py-1.5 rounded-full shadow-sm text-slate-500 font-bold hover:bg-slate-50">💾 備份</button>
+                    <button onclick="importData()" class="text-[10px] bg-white px-3 py-1.5 rounded-full shadow-sm text-slate-500 font-bold hover:bg-slate-50">📂 恢復</button>
+                </div>
+                <p class="text-[9px] text-amber-500/80 font-medium text-right leading-relaxed">⚠️ 暫存於瀏覽器，請隨時備份。</p>
+            </div>
+        </div>
+
+        <section id="page-daily">
+            <div class="max-w-md mx-auto card p-10">
+                <div id="group-label" class="mb-4 text-center text-[10px] font-black text-green-600 tracking-widest uppercase">UNIT</div>
+                <div class="flex justify-between items-center mb-6">
+                    <button onclick="changeDate(-1)" class="text-slate-200 hover:text-slate-500 text-2xl">❮</button>
+                    <div class="text-center">
+                        <div id="display-date" class="text-2xl font-bold text-slate-700"></div>
+                        <div id="range-hint" class="text-[10px] text-slate-400 mt-2 font-mono uppercase"></div>
+                    </div>
+                    <button onclick="changeDate(1)" class="text-slate-200 hover:text-slate-500 text-2xl">❯</button>
+                </div>
+
+                <div class="mb-6 bg-slate-50 p-4 rounded-3xl text-center">
+                    <label class="block text-[8px] text-slate-300 mb-1 uppercase tracking-tighter">Current Mood</label>
+                    <select id="mood-select" onchange="saveMeta()" class="bg-transparent text-2xl outline-none cursor-pointer">
+                        <option value="✨">✨ 平靜</option><option value="😊">😊 喜悅</option>
+                        <option value="🌿">🌿 舒爽</option><option value="☁️">☁️ 緩慢</option>
+                        <option value="🌙">🌙 沉思</option><option value="⚡">⚡ 能量</option>
+                    </select>
+                </div>
+
+                <div id="quick-pick-area" class="flex flex-wrap gap-2 mb-8 justify-center"></div>
+
+                <div id="task-list" class="space-y-3"></div>
+                <button onclick="addTask()" class="w-full mt-10 py-4 text-slate-300 text-sm font-bold border-2 border-dashed border-slate-100 rounded-[2rem] hover:border-slate-300 transition-all">+ 新增今日行動</button>
+            </div>
+			<p><br><br><br></p>
+        </section>
+
+        <section id="page-board" class="hidden relative">
+            <div class="flex justify-center items-center gap-4 mb-6">
+                <span class="text-[10px] font-black text-slate-400 tracking-widest uppercase">Review Unit</span>
+                <select id="board-unit-select" onchange="renderBoard(parseInt(this.value))" class="bg-white px-4 py-2 rounded-full shadow-sm text-xs font-bold text-slate-600 outline-none border border-slate-100"></select>
+            </div>
+            <div class="relative">
+                <button onclick="scrollBoard(-1)" class="nav-arrow arrow-left">❮</button>
+                <div id="board-viewport" class="board-viewport"><div id="board-track" class="board-track"></div></div>
+                <button onclick="scrollBoard(1)" class="nav-arrow arrow-right">❯</button>
+            </div>
+        </section>
+
+        <section id="page-yearly" class="hidden">
+            <div id="grid-container" class="grid grid-cols-2 sm:grid-cols-4 gap-4"></div>
+			<p><br><br><br></p>
+        </section>
+
+        <section id="page-manage" class="hidden">
+			<div class="mt-8 p-6 bg-slate-50 rounded-[2rem] border border-slate-100 shadow-inner">
+				<h3 class="text-center font-bold text-slate-400 mb-4 tracking-widest uppercase text-[10px]">介面顯示設定</h3>
+				<div class="flex justify-between gap-2">
+					<button id="font-90" onclick="changeFontSize('90%')" class="flex-1 py-3 bg-white border border-slate-200 rounded-2xl text-xs text-slate-500 transition-all hover:shadow-sm">精緻</button>
+					<button id="font-100" onclick="changeFontSize('100%')" class="flex-1 py-3 bg-white border border-slate-200 rounded-2xl text-xs text-slate-500 transition-all hover:shadow-sm">標準</button>
+					<button id="font-120" onclick="changeFontSize('120%')" class="flex-1 py-3 bg-white border border-slate-200 rounded-2xl text-xs text-slate-500 transition-all hover:shadow-sm font-bold">放大</button>
+				</div>
+				<p class="text-[9px] text-slate-300 text-center mt-3 tracking-tighter">調整後將套用至全站並自動儲存</p>
+			</div>
+			<p><br></p>
+            <div class="max-w-md mx-auto card p-10">
+                <h2 class="text-center font-bold text-slate-600 mb-6 tracking-widest uppercase text-xs">— 常用行動管理 —</h2>
+                <div class="space-y-3 mb-8">
+                    <div class="flex gap-2">
+                        <input type="text" id="new-common-input" placeholder="例：冥想 10 分鐘" class="flex-1 bg-slate-50 rounded-xl px-4 py-2 text-sm outline-none">
+                        <button onclick="addCommonItem()" class="bg-green-500 text-white px-4 py-2 rounded-xl text-sm font-bold">新增</button>
+                    </div>
+                    <div id="common-management-list" class="space-y-2"></div>
+                </div>
+                <p class="text-center text-[10px] text-slate-300 italic">在此編輯的項目會出現在 Daily 頁面的快捷區</p>
+            </div>
+			<p><br><br><br></p>
+        </section>
+
+        <section id="page-about" class="hidden">
+            <div class="max-w-md mx-auto card p-10 text-center">
+                <h2 class="text-lg font-bold text-slate-600 mb-6 tracking-widest">關於 Life 41</h2>
+                <div class="mb-10 p-8 bg-stone-50 rounded-[2.5rem] border border-stone-100 text-left shadow-inner text-sm text-slate-600 space-y-4">
+                    <p class="font-medium text-center">— 核心設計理念 —</p>
+                    <p>
+                        這是由「Life 36」進化而來的「Life 41」版本。<br>
+                        我們將一年劃分為 41 個循環，每個循環為 9 天 。<br>
+                        這讓節奏更為緊湊且富有彈性。最後一組（Unit 41）特別設計為 5 天的年末休息組，讓你在跨年前擁有完整的留白 。
+                    </p>
+                </div>
+                <div class="space-y-4 text-xs text-slate-500">
+                    <p>由 <span class="text-slate-800 font-bold">星火太太</span> 構思定義</p>
+                    <p>由 <span class="text-slate-800 font-bold">Gemini AI</span> 協助開發</p>
+                </div>
+            </div>
+			<p><br><br><br></p>
+        </section>
+
+        <nav class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-md shadow-2xl px-6 py-5 rounded-full flex gap-6 md:gap-10 z-50">
+            <button onclick="showPage('daily')" id="nav-daily" class="active-tab text-[10px] font-bold uppercase tracking-widest">Daily</button>
+            <button onclick="showPage('board')" id="nav-board" class="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Board</button>
+            <button onclick="showPage('yearly')" id="nav-yearly" class="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Yearly</button>
+            <button onclick="showPage('manage')" id="nav-manage" class="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Manage</button>
+            <button onclick="showPage('about')" id="nav-about" class="text-slate-400 text-[10px] font-bold uppercase tracking-widest">About</button>
+        </nav>
+    </div>
+
+	<script>
+	    // 41組日期資料
+	    const plan = [{id:1, s:"01-01", e:"01-09"}, {id:2, s:"01-10", e:"01-18"}, {id:3, s:"01-19", e:"01-27"}, {id:4, s:"01-28", e:"02-05"}, {id:5, s:"02-06", e:"02-14"}, {id:6, s:"02-15", e:"02-23"}, {id:7, s:"02-24", e:"03-04"}, {id:8, s:"03-05", e:"03-13"}, {id:9, s:"03-14", e:"03-22"}, {id:10, s:"03-23", e:"03-31"}, {id:11, s:"04-01", e:"04-09"}, {id:12, s:"04-10", e:"04-18"}, {id:13, s:"04-19", e:"04-27"}, {id:14, s:"04-28", e:"05-06"}, {id:15, s:"05-07", e:"05-15"}, {id:16, s:"05-16", e:"05-24"}, {id:17, s:"05-25", e:"06-02"}, {id:18, s:"06-03", e:"06-11"}, {id:19, s:"06-12", e:"06-20"}, {id:20, s:"06-21", e:"06-29"}, {id:21, s:"06-30", e:"07-08"}, {id:22, s:"07-09", e:"07-17"}, {id:23, s:"07-18", e:"07-26"}, {id:24, s:"07-27", e:"08-04"}, {id:25, s:"08-05", e:"08-13"}, {id:26, s:"08-14", e:"08-22"}, {id:27, s:"08-23", e:"08-31"}, {id:28, s:"09-01", e:"09-09"}, {id:29, s:"09-10", e:"09-18"}, {id:30, s:"09-19", e:"09-27"}, {id:31, s:"09-28", e:"10-06"}, {id:32, s:"10-07", e:"10-15"}, {id:33, s:"10-16", e:"10-24"}, {id:34, s:"10-25", e:"11-02"}, {id:35, s:"11-03", e:"11-11"}, {id:36, s:"11-12", e:"11-20"}, {id:37, s:"11-21", e:"11-29"}, {id:38, s:"11-30", e:"12-08"}, {id:39, s:"12-09", e:"12-17"}, {id:40, s:"12-18", e:"12-26"}, {id:41, s:"12-27", e:"12-31"}];
+	
+	    let viewerDate = new Date();
+	
+	    // 強制重設為「現在」的函數
+	    function resetToToday() {
+	        console.log("執行強制校準...");
+	        viewerDate = new Date();
+	        updateDaily();
+	        showPage('daily');
+	        
+	        // 標題回饋
+	        const h1 = document.querySelector('h1');
+	        if(h1) {
+	            h1.style.transition = '0.3s';
+	            h1.style.color = '#4CAF50';
+	            setTimeout(() => { h1.style.color = '#94a3b8'; }, 300);
+	        }
+	    }
+	
+	    function showPage(page) {
+	        ['daily', 'board', 'yearly', 'manage', 'about'].forEach(p => {
+	            const el = document.getElementById('page-'+p);
+	            if(el) el.classList.add('hidden');
+	            const nav = document.getElementById('nav-'+p);
+	            if(nav) nav.className = 'text-slate-400 text-[10px] font-bold uppercase tracking-widest';
+	        });
+	        document.getElementById('page-'+page).classList.remove('hidden');
+	        document.getElementById('nav-'+page).className = 'active-tab text-[10px] font-bold uppercase tracking-widest';
+	        
+	        if(page === 'yearly') renderYearly();
+	        if(page === 'manage') renderManagementList();
+	        if(page === 'board') { 
+	            initBoardSelect(); 
+	            const curId = getInfo(new Date()).id;
+	            document.getElementById('board-unit-select').value = curId; 
+	            renderBoard(parseInt(curId)); 
+	        }
+	    }
+	
+	    function updateDaily() {
+	        // 使用在地時間格式避免時差錯誤
+	        const y = viewerDate.getFullYear();
+	        const m = String(viewerDate.getMonth() + 1).padStart(2, '0');
+	        const d = String(viewerDate.getDate()).padStart(2, '0');
+	        const dateStr = `${y}-${m}-${d}`;
+	        
+	        document.getElementById('display-date').innerText = dateStr;
+	        const info = getInfo(viewerDate);
+	        document.getElementById('group-label').innerText = `UNIT ${info.id}`;
+	        document.getElementById('range-hint').innerText = `${info.s} ~ ${info.e}`;
+	        
+	        const qpArea = document.getElementById('quick-pick-area'); 
+	        if(qpArea){
+	            qpArea.innerHTML = '';
+	            getCommonItems().forEach(item => {
+	                const btn = document.createElement('button');
+	                btn.className = "text-[10px] px-3 py-1 bg-white border border-slate-100 rounded-full text-slate-400 hover:bg-green-50 shadow-sm transition-colors";
+	                btn.innerText = item;
+	                btn.onclick = () => { addTask(item); saveTasks(); };
+	                qpArea.appendChild(btn);
+	            });
+	        }
+	
+	        const list = document.getElementById('task-list'); list.innerHTML = '';
+	        const saved = JSON.parse(localStorage.getItem('tasks-' + dateStr) || '[]');
+	        saved.forEach(t => addTask(t.txt, t.done));
+	        const meta = JSON.parse(localStorage.getItem('meta-' + dateStr) || '{"mood":"✨"}');
+	        document.getElementById('mood-select').value = meta.mood;
+	    }
+	
+	    function addTask(txt = '', done = false) {
+	        const container = document.getElementById('task-list');
+	        const row = document.createElement('div');
+	        row.className = `flex items-center gap-4 p-4 rounded-2xl bg-white border border-slate-50 shadow-sm`;
+	        row.innerHTML = `<input type="checkbox" ${done ? 'checked' : ''} onchange="saveTasks(); updateRowStyle(this)" class="w-6 h-6 accent-green-600 cursor-pointer"><input type="text" value="${txt}" onblur="saveTasks()" placeholder="..." class="flex-1 text-sm outline-none bg-transparent font-bold ${done ? 'text-green-700' : 'text-slate-600'}"><button onclick="this.parentElement.remove(); saveTasks()" class="text-slate-200 hover:text-red-400 text-xs">✕</button>`;
+	        container.appendChild(row);
+	        if(done) updateRowStyle(row.querySelector('input[type="checkbox"]'));
+	    }
+	
+	    function saveTasks() {
+	        const y = viewerDate.getFullYear();
+	        const m = String(viewerDate.getMonth() + 1).padStart(2, '0');
+	        const d = String(viewerDate.getDate()).padStart(2, '0');
+	        const dateStr = `${y}-${m}-${d}`;
+	        const data = Array.from(document.querySelectorAll('#task-list > div')).map(r => ({
+	            txt: r.querySelector('input[type="text"]').value,
+	            done: r.querySelector('input[type="checkbox"]').checked
+	        })).filter(i => i.txt.trim() !== '');
+	        localStorage.setItem('tasks-' + dateStr, JSON.stringify(data));
+	    }
+	
+	    function updateRowStyle(el) { const r = el.parentElement; const i = r.querySelector('input[type="text"]'); if(el.checked){ r.classList.add('bg-green-50'); i.classList.add('text-green-700'); } else { r.classList.remove('bg-green-50'); i.classList.remove('text-green-700'); } }
+	
+	    function getInfo(date) {
+	        const m = date.getMonth()+1; const d = date.getDate(); const mmdd = (m<10?'0'+m:m)+'-'+(d<10?'0'+d:d);
+	        if(mmdd === '02-29') return {id: '⚡', s: '02-29', e: '02-29'};
+	        return plan.find(p => mmdd >= p.s && mmdd <= p.e) || {id: '🧘', s: '12-28', e: '12-31'};
+	    }
+	
+	    function saveMeta() { 
+	        const y = viewerDate.getFullYear();
+	        const m = String(viewerDate.getMonth() + 1).padStart(2, '0');
+	        const d = String(viewerDate.getDate()).padStart(2, '0');
+	        localStorage.setItem('meta-' + `${y}-${m}-${d}`, JSON.stringify({ mood: document.getElementById('mood-select').value })); 
+	    }
+	
+	    function changeDate(n) { viewerDate.setDate(viewerDate.getDate() + n); updateDaily(); }
+	
+	    function getCommonItems() { return JSON.parse(localStorage.getItem('common-tasks-36') || '["🧘 冥想", "💧 喝水", "📖 閱讀"]'); }
+	    function saveCommonItems(items) { localStorage.setItem('common-tasks-36', JSON.stringify(items)); }
+	    function renderManagementList() {
+	        const list = document.getElementById('common-management-list'); if(!list) return;
+	        list.innerHTML = '';
+	        getCommonItems().forEach((item, idx) => {
+	            const div = document.createElement('div');
+	            div.className = "flex justify-between items-center bg-slate-50 p-3 rounded-xl text-sm font-bold text-slate-600";
+	            div.innerHTML = `<span>${item}</span><button onclick="removeCommonItem(${idx})" class="text-red-300 hover:text-red-500">✕</button>`;
+	            list.appendChild(div);
+	        });
+	    }
+	    function addCommonItem() {
+	        const val = document.getElementById('new-common-input').value.trim();
+	        if(!val) return;
+	        const items = getCommonItems(); items.push(val);
+	        saveCommonItems(items); document.getElementById('new-common-input').value = '';
+	        renderManagementList();
+	    }
+	    function removeCommonItem(idx) { const items = getCommonItems(); items.splice(idx, 1); saveCommonItems(items); renderManagementList(); }
+	
+	    function changeFontSize(size) {
+	        document.documentElement.style.setProperty('--base-font-size', size);
+	        localStorage.setItem('user-font-size', size);
+	        ['90%', '100%', '120%'].forEach(s => {
+	            const btn = document.getElementById('font-' + s.replace('%', ''));
+	            if (btn) btn.classList.remove('font-btn-active');
+	        });
+	        const activeBtn = document.getElementById('font-' + size.replace('%', ''));
+	        if (activeBtn) activeBtn.classList.add('font-btn-active');
+	    }
+	
+	    function initBoardSelect() { const sel = document.getElementById('board-unit-select'); if(!sel || sel.options.length>0) return; plan.forEach(u => { const opt = document.createElement('option'); opt.value = u.id; opt.innerText = `Unit ${u.id<10?'0'+u.id:u.id} (${u.s} ~ ${u.e})`; sel.appendChild(opt); }); }
+	    
+	    function renderBoard(targetId) {
+	        const track = document.getElementById('board-track'); if(!track) return;
+	        track.innerHTML = '';
+	        const unit = plan.find(p => p.id === targetId); if(!unit) return;
+	        const s = new Date(new Date().getFullYear()+'-'+unit.s);
+	        const e = new Date(new Date().getFullYear()+'-'+unit.e);
+	        const days = Math.ceil((e-s)/86400000)+1;
+	        const todayStr = new Date().toLocaleDateString('en-CA');
+	        let todayEl = null;
+	        for(let i=0; i<days; i++) {
+	            const d = new Date(s); d.setDate(s.getDate()+i);
+	            const dStr = d.toLocaleDateString('en-CA');
+	            const tasks = JSON.parse(localStorage.getItem('tasks-'+dStr)||'[]');
+	            const meta = JSON.parse(localStorage.getItem('meta-'+dStr)||'{"mood":"✨"}');
+	            const col = document.createElement('div');
+	            col.className = `board-card card p-8 flex flex-col ${dStr===todayStr?'today-highlight':''}`;
+	            col.innerHTML = `<div class="text-center mb-6"><div class="text-[9px] font-black opacity-30 uppercase">Day ${i+1}</div><div class="text-lg font-bold text-slate-600">${dStr.substring(5).replace('-','/')}</div><div class="text-2xl mt-2">${meta.mood}</div></div><div class="space-y-2 flex-1 overflow-y-auto">${tasks.map(t=>`<div class="p-3 rounded-xl text-[11px] font-bold shadow-sm ${t.done?'board-item-done':'bg-slate-50 text-slate-400'}">${t.txt}</div>`).join('')}</div>`;
+	            track.appendChild(col);
+	            if(dStr===todayStr) todayEl = col;
+	        }
+	        setTimeout(() => { if(todayEl) todayEl.scrollIntoView({ behavior: 'smooth', inline: 'center' }); }, 100);
+	    }
+	
+	    function renderYearly() {
+	        const container = document.getElementById('grid-container'); if(!container) return;
+	        container.innerHTML = '';
+	        const curId = getInfo(new Date()).id;
+	        plan.forEach(u => {
+	            const goal = localStorage.getItem('goal-' + u.id) || '';
+	            const div = document.createElement('div');
+	            div.className = `card p-4 min-h-[8em] flex flex-col ${u.id === curId ? 'bg-green-50 border-green-200 shadow-md scale-105 z-10' : ''}`;
+	            div.innerHTML = `<div class="flex justify-between items-start mb-2"><div class="text-[0.65rem] font-black opacity-30 uppercase tracking-tighter">Unit ${u.id}</div><div class="text-[0.6rem] text-slate-400 font-mono">${u.s}-${u.e}</div></div><textarea onblur="localStorage.setItem('goal-${u.id}', this.value)" placeholder="..." class="w-full bg-transparent outline-none text-[0.8rem] leading-relaxed text-slate-600 flex-1 resize-none">${goal}</textarea>`;
+	            container.appendChild(div);
+	        });
+	    }
+	
+	    function scrollBoard(dir) { document.getElementById('board-viewport').scrollBy({ left: dir * 310, behavior: 'smooth' }); }
+	    function exportData() { const d = {}; for(let i=0; i<localStorage.length; i++) { const k = localStorage.key(i); d[k] = localStorage.getItem(k); } const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(d)], {type: 'application/json'})); a.download = `life_backup.json`; a.click(); }
+	    function importData() { const inp = document.createElement('input'); inp.type = 'file'; inp.onchange = e => { const r = new FileReader(); r.onload = ev => { const d = JSON.parse(ev.target.result); Object.keys(d).forEach(k => localStorage.setItem(k, d[k])); location.reload(); }; r.readAsText(e.target.files[0]); }; inp.click(); }
+	
+	    // 【啟動點】
+	    window.onload = function() {
+	        console.log("Life 啟動中...");
+	        
+	        // 1. 強制重設日期
+	        viewerDate = new Date();
+	        
+	        // 2. 標題綁定
+	        const title = document.querySelector('h1');
+	        if(title) title.onclick = resetToToday;
+	
+	        // 3. 字體讀取
+	        const savedSize = localStorage.getItem('user-font-size') || '100%';
+	        changeFontSize(savedSize);
+	
+	        // 4. 初次渲染
+	        updateDaily();
+	
+	        // 5. 喚醒監聽
+	        document.addEventListener("visibilitychange", () => {
+	            if (document.visibilityState === 'visible') resetToToday();
+	        });
+	    };
+	</script>
+</body>
+</html>
+
