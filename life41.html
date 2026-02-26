@@ -175,23 +175,34 @@
 	        }
 	    }
 	
-	    function showPage(page) {
+		function showPage(page) {
+	        // 進入任何頁面都先確認一下日期有沒有跨日
+	        const now = new Date();
+	        
 	        ['daily', 'board', 'yearly', 'manage', 'about'].forEach(p => {
 	            const el = document.getElementById('page-'+p);
 	            if(el) el.classList.add('hidden');
 	            const nav = document.getElementById('nav-'+p);
 	            if(nav) nav.className = 'text-slate-400 text-[10px] font-bold uppercase tracking-widest';
 	        });
+	        
 	        document.getElementById('page-'+page).classList.remove('hidden');
 	        document.getElementById('nav-'+page).className = 'active-tab text-[10px] font-bold uppercase tracking-widest';
 	        
+	        if(page === 'daily') updateDaily();
 	        if(page === 'yearly') renderYearly();
 	        if(page === 'manage') renderManagementList();
+	        
 	        if(page === 'board') { 
-	            initBoardSelect(); 
-	            const curId = getInfo(new Date()).id;
-	            document.getElementById('board-unit-select').value = curId; 
-	            renderBoard(parseInt(curId)); 
+	            initBoardSelect(); // 確保選單已建立
+	            
+	            // 【核心修正】強制看板跳轉到「viewerDate (目前顯示日期)」所在的組別
+	            const currentInfo = getInfo(viewerDate); 
+	            const sel = document.getElementById('board-unit-select');
+	            if(sel) {
+	                sel.value = currentInfo.id; // 讓下拉選單顯示正確組別
+	                renderBoard(currentInfo.id); // 渲染該組別的卡片
+	            }
 	        }
 	    }
 	
@@ -298,27 +309,61 @@
 	
 	    function initBoardSelect() { const sel = document.getElementById('board-unit-select'); if(!sel || sel.options.length>0) return; plan.forEach(u => { const opt = document.createElement('option'); opt.value = u.id; opt.innerText = `Unit ${u.id<10?'0'+u.id:u.id} (${u.s} ~ ${u.e})`; sel.appendChild(opt); }); }
 	    
-	    function renderBoard(targetId) {
-	        const track = document.getElementById('board-track'); if(!track) return;
+		function renderBoard(targetId) {
+	        const track = document.getElementById('board-track'); 
+	        if(!track) return;
 	        track.innerHTML = '';
-	        const unit = plan.find(p => p.id === targetId); if(!unit) return;
-	        const s = new Date(new Date().getFullYear()+'-'+unit.s);
-	        const e = new Date(new Date().getFullYear()+'-'+unit.e);
-	        const days = Math.ceil((e-s)/86400000)+1;
-	        const todayStr = new Date().toLocaleDateString('en-CA');
+	        
+	        // 找尋對應組別
+	        const unit = plan.find(p => p.id == targetId); 
+	        if(!unit) return;
+	        
+	        // 取得該組起始日期 (假設為今年)
+	        const currentYear = new Date().getFullYear();
+	        const s = new Date(`${currentYear}-${unit.s}`);
+	        const e = new Date(`${currentYear}-${unit.e}`);
+	        
+	        // 計算該組總天數
+	        const days = Math.ceil((e - s) / 86400000) + 1;
+	        
+	        // 取得「真正的今天」字串，用來畫黃色框框
+	        const realTodayStr = new Date().toLocaleDateString('en-CA'); 
 	        let todayEl = null;
+	
 	        for(let i=0; i<days; i++) {
-	            const d = new Date(s); d.setDate(s.getDate()+i);
+	            const d = new Date(s);
+	            d.setDate(s.getDate() + i);
 	            const dStr = d.toLocaleDateString('en-CA');
-	            const tasks = JSON.parse(localStorage.getItem('tasks-'+dStr)||'[]');
-	            const meta = JSON.parse(localStorage.getItem('meta-'+dStr)||'{"mood":"✨"}');
+	            
+	            const tasks = JSON.parse(localStorage.getItem('tasks-' + dStr) || '[]');
+	            const meta = JSON.parse(localStorage.getItem('meta-' + dStr) || '{"mood":"✨"}');
+	            
 	            const col = document.createElement('div');
-	            col.className = `board-card card p-8 flex flex-col ${dStr===todayStr?'today-highlight':''}`;
-	            col.innerHTML = `<div class="text-center mb-6"><div class="text-[9px] font-black opacity-30 uppercase">Day ${i+1}</div><div class="text-lg font-bold text-slate-600">${dStr.substring(5).replace('-','/')}</div><div class="text-2xl mt-2">${meta.mood}</div></div><div class="space-y-2 flex-1 overflow-y-auto">${tasks.map(t=>`<div class="p-3 rounded-xl text-[11px] font-bold shadow-sm ${t.done?'board-item-done':'bg-slate-50 text-slate-400'}">${t.txt}</div>`).join('')}</div>`;
+	            // 如果這張卡片就是今天，加上 today-highlight
+	            col.className = `board-card card p-8 flex flex-col ${dStr === realTodayStr ? 'today-highlight' : ''}`;
+	            
+	            col.innerHTML = `
+	                <div class="text-center mb-6">
+	                    <div class="text-[9px] font-black opacity-30 uppercase">Day ${i+1}</div>
+	                    <div class="text-lg font-bold text-slate-600">${dStr.substring(5).replace('-','/')}</div>
+	                    <div class="text-2xl mt-2">${meta.mood}</div>
+	                </div>
+	                <div class="space-y-2 flex-1 overflow-y-auto">
+	                    ${tasks.map(t => `<div class="p-3 rounded-xl text-[11px] font-bold shadow-sm ${t.done ? 'board-item-done' : 'bg-slate-50 text-slate-400'}">${t.txt}</div>`).join('')}
+	                </div>`;
+	            
 	            track.appendChild(col);
-	            if(dStr===todayStr) todayEl = col;
+	            if(dStr === realTodayStr) todayEl = col;
 	        }
-	        setTimeout(() => { if(todayEl) todayEl.scrollIntoView({ behavior: 'smooth', inline: 'center' }); }, 100);
+	
+	        // 自動捲動到今天那張卡片
+	        setTimeout(() => { 
+	            if(todayEl) {
+	                todayEl.scrollIntoView({ behavior: 'smooth', inline: 'center' }); 
+	            } else if(track.firstChild) {
+	                track.firstChild.scrollIntoView({ behavior: 'smooth', inline: 'center' });
+	            }
+	        }, 200);
 	    }
 	
 	    function renderYearly() {
@@ -364,4 +409,5 @@
 	</script>
 </body>
 </html>
+
 
