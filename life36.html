@@ -161,174 +161,212 @@
 
     <script>
         const plan = [{id:1, s:"01-01", e:"01-10"}, {id:2, s:"01-11", e:"01-20"}, {id:3, s:"01-21", e:"01-30"}, {id:4, s:"02-01", e:"02-10"}, {id:5, s:"02-11", e:"02-20"}, {id:6, s:"02-21", e:"03-02"}, {id:7, s:"03-03", e:"03-12"}, {id:8, s:"03-13", e:"03-22"}, {id:9, s:"03-23", e:"04-01"}, {id:10, s:"04-02", e:"04-11"}, {id:11, s:"04-12", e:"04-21"}, {id:12, s:"04-22", e:"05-01"}, {id:13, s:"05-02", e:"05-11"}, {id:14, s:"05-12", e:"05-21"}, {id:15, s:"05-22", e:"05-31"}, {id:16, s:"06-01", e:"06-10"}, {id:17, s:"06-11", e:"06-20"}, {id:18, s:"06-21", e:"06-30"}, {id:19, s:"07-01", e:"07-10"}, {id:20, s:"07-11", e:"07-20"}, {id:21, s:"07-21", e:"07-30"}, {id:22, s:"07-31", e:"08-09"}, {id:23, s:"08-10", e:"08-19"}, {id:24, s:"08-20", e:"08-29"}, {id:25, s:"08-30", e:"09-08"}, {id:26, s:"09-09", e:"09-18"}, {id:27, s:"09-19", e:"09-28"}, {id:28, s:"09-29", e:"10-08"}, {id:29, s:"10-09", e:"10-18"}, {id:30, s:"10-19", e:"10-28"}, {id:31, s:"10-29", e:"11-07"}, {id:32, s:"11-08", e:"11-17"}, {id:33, s:"11-18", e:"11-27"}, {id:34, s:"11-28", e:"12-07"}, {id:35, s:"12-08", e:"12-17"}, {id:36, s:"12-18", e:"12-27"}];
-        let viewerDate = new Date();
+		let viewerDate = new Date();
 
-        function showPage(page) {
-            ['daily', 'board', 'yearly', 'manage', 'about'].forEach(p => {
-                document.getElementById('page-'+p).classList.add('hidden');
-                document.getElementById('nav-'+p).className = 'text-slate-400 text-[10px] font-bold uppercase tracking-widest';
-            });
-            document.getElementById('page-'+page).classList.remove('hidden');
-            document.getElementById('nav-'+page).className = 'active-tab text-[10px] font-bold uppercase tracking-widest';
-            if(page === 'yearly') renderYearly();
-            if(page === 'manage') renderManagementList();
-            if(page === 'board') { initBoardSelect(); const cur = getInfo(new Date()).id; document.getElementById('board-unit-select').value = cur; renderBoard(parseInt(cur)); }
-            if(page === 'daily') updateDaily();
-        }
-
-        // --- 常用管理邏輯 ---
-        function getCommonItems() { return JSON.parse(localStorage.getItem('common-tasks-36') || '["🧘 冥想", "💧 喝水", "📖 閱讀"]'); }
-        function saveCommonItems(items) { localStorage.setItem('common-tasks-36', JSON.stringify(items)); }
-        function addCommonItem() {
-            const val = document.getElementById('new-common-input').value.trim();
-            if(!val) return;
-            const items = getCommonItems(); items.push(val);
-            saveCommonItems(items); document.getElementById('new-common-input').value = '';
-            renderManagementList();
-        }
-        function renderManagementList() {
-            const list = document.getElementById('common-management-list'); list.innerHTML = '';
-            getCommonItems().forEach((item, idx) => {
-                const div = document.createElement('div');
-                div.className = "flex justify-between items-center bg-slate-50 p-3 rounded-xl text-sm font-bold text-slate-600";
-                div.innerHTML = `<span>${item}</span><button onclick="removeCommonItem(${idx})" class="text-red-300 hover:text-red-500">✕</button>`;
-                list.appendChild(div);
-            });
-        }
-        function removeCommonItem(idx) { const items = getCommonItems(); items.splice(idx, 1); saveCommonItems(items); renderManagementList(); }
-
-        // --- 核心渲染 ---
-        function updateDaily() {
-            const dateStr = viewerDate.toISOString().split('T')[0];
-            document.getElementById('display-date').innerText = dateStr;
-            const info = getInfo(viewerDate);
-            document.getElementById('group-label').innerText = `UNIT ${info.id}`;
-            document.getElementById('range-hint').innerText = `${info.s} ~ ${info.e}`;
-            
-            const qpArea = document.getElementById('quick-pick-area'); qpArea.innerHTML = '';
-            getCommonItems().forEach(item => {
-                const btn = document.createElement('button');
-                btn.className = "text-[10px] px-3 py-1 bg-white border border-slate-100 rounded-full text-slate-400 hover:bg-green-50 shadow-sm transition-colors";
-                btn.innerText = item;
-                btn.onclick = () => { addTask(item); saveTasks(); };
-                qpArea.appendChild(btn);
-            });
-
-            const list = document.getElementById('task-list'); list.innerHTML = '';
-            const saved = JSON.parse(localStorage.getItem('tasks-' + dateStr) || '[]');
-            saved.forEach(t => addTask(t.txt, t.done));
-            const meta = JSON.parse(localStorage.getItem('meta-' + dateStr) || '{"mood":"✨"}');
-            document.getElementById('mood-select').value = meta.mood;
-        }
-
-        function addTask(txt = '', done = false) {
-            const container = document.getElementById('task-list');
-            const row = document.createElement('div');
-            row.className = `flex items-center gap-4 p-4 rounded-2xl bg-white border border-slate-50 shadow-sm`;
-            row.innerHTML = `<input type="checkbox" ${done ? 'checked' : ''} onchange="saveTasks(); updateRowStyle(this)" class="w-6 h-6 accent-green-600 cursor-pointer"><input type="text" value="${txt}" onblur="saveTasks()" placeholder="..." class="flex-1 text-sm outline-none bg-transparent font-bold ${done ? 'text-green-700' : 'text-slate-600'}"><button onclick="this.parentElement.remove(); saveTasks()" class="text-slate-200 hover:text-red-400 text-xs">✕</button>`;
-            container.appendChild(row);
-            if(done) updateRowStyle(row.querySelector('input[type="checkbox"]'));
-        }
-
-        function saveTasks() {
-            const dateStr = viewerDate.toISOString().split('T')[0];
-            const data = Array.from(document.querySelectorAll('#task-list > div')).map(r => ({
-                txt: r.querySelector('input[type="text"]').value,
-                done: r.querySelector('input[type="checkbox"]').checked
-            })).filter(i => i.txt.trim() !== '');
-            localStorage.setItem('tasks-' + dateStr, JSON.stringify(data));
-        }
-
-        function updateRowStyle(el) { const r = el.parentElement; const i = r.querySelector('input[type="text"]'); if(el.checked){ r.classList.add('bg-green-50'); i.classList.add('text-green-700'); } else { r.classList.remove('bg-green-50'); i.classList.remove('text-green-700'); } }
-        function getInfo(date) {
-            const m = date.getMonth()+1; const d = date.getDate(); const mmdd = (m<10?'0'+m:m)+'-'+(d<10?'0'+d:d);
-            if(mmdd === '02-29') return {id: '⚡', s: '02-29', e: '02-29'};
-            if(mmdd >= '12-28') return {id: '🧘', s: '12-28', e: '12-31'};
-            return plan.find(p => mmdd >= p.s && mmdd <= p.e) || {id: '?', s:'', e:''};
-        }
-        function saveMeta() { localStorage.setItem('meta-' + viewerDate.toISOString().split('T')[0], JSON.stringify({ mood: document.getElementById('mood-select').value })); }
-        function changeDate(n) { viewerDate.setDate(viewerDate.getDate() + n); updateDaily(); }
-        function initBoardSelect() { const sel = document.getElementById('board-unit-select'); if(sel.options.length>0) return; plan.forEach(u => { const opt = document.createElement('option'); opt.value = u.id; opt.innerText = `Unit ${u.id<10?'0'+u.id:u.id} (${u.s} ~ ${u.e})`; sel.appendChild(opt); }); }
-        
-        function renderBoard(targetId) {
-            const track = document.getElementById('board-track'); track.innerHTML = '';
-            const unit = plan.find(p => p.id === targetId); if(!unit) return;
-            const s = new Date(new Date().getFullYear()+'-'+unit.s);
-            const e = new Date(new Date().getFullYear()+'-'+unit.e);
-            const days = Math.ceil((e-s)/86400000)+1;
-            const todayStr = new Date().toISOString().split('T')[0];
-            let todayEl = null;
-            for(let i=0; i<days; i++) {
-                const d = new Date(s); d.setDate(s.getDate()+i);
-                const dStr = d.toISOString().split('T')[0];
-                const tasks = JSON.parse(localStorage.getItem('tasks-'+dStr)||'[]');
-                const meta = JSON.parse(localStorage.getItem('meta-'+dStr)||'{"mood":"✨"}');
-                const col = document.createElement('div');
-                col.className = `board-card card p-8 flex flex-col ${dStr===todayStr?'today-highlight':''}`;
-                col.innerHTML = `<div class="text-center mb-6"><div class="text-[9px] font-black opacity-30 uppercase">Day ${i+1}</div><div class="text-lg font-bold text-slate-600">${dStr.substring(5).replace('-','/')}</div><div class="text-2xl mt-2">${meta.mood}</div></div><div class="space-y-2 flex-1 overflow-y-auto">${tasks.map(t=>`<div class="p-3 rounded-xl text-[11px] font-bold shadow-sm ${t.done?'board-item-done':'bg-slate-50 text-slate-400'}">${t.txt}</div>`).join('')}</div>`;
-                track.appendChild(col);
-                if(dStr===todayStr) todayEl = col;
-            }
-            setTimeout(() => { if(todayEl) todayEl.scrollIntoView({ behavior: 'smooth', inline: 'center' }); else if(track.firstChild) track.firstChild.scrollIntoView({ behavior: 'smooth', inline: 'center' }); }, 100);
-        }
-
-		function renderYearly() {
-            const container = document.getElementById('grid-container'); 
-            container.innerHTML = '';
-            const curId = getInfo(new Date()).id;
-            
-            plan.forEach(u => {
-                const goal = localStorage.getItem('goal-' + u.id) || '';
-                const div = document.createElement('div');
-                
-                // 使用相對單位 em，讓它跟隨 html 的 font-size 縮放
-                // min-h 也要稍微調整，避免放大後字疊在一起
-                div.className = `card p-4 min-h-[8em] flex flex-col ${u.id === curId ? 'bg-green-50 border-green-200 shadow-md scale-105 z-10' : ''}`;
-                
-                div.innerHTML = `
-                    <div class="flex justify-between items-start mb-2">
-                        <div class="text-[0.65rem] font-black opacity-30 uppercase tracking-tighter">Unit ${u.id}</div>
-                        <div class="text-[0.6rem] text-slate-400 font-mono">${u.s}-${u.e}</div>
-                    </div>
-                    <textarea 
-                        onblur="localStorage.setItem('goal-${u.id}', this.value)" 
-                        placeholder="點擊輸入目標..."
-                        class="w-full bg-transparent outline-none text-[0.8rem] leading-relaxed text-slate-600 flex-1 resize-none placeholder:text-slate-200"
-                    >${goal}</textarea>
-                `;
-                container.appendChild(div);
-            });
-        }
-
-        function scrollBoard(dir) { document.getElementById('board-viewport').scrollBy({ left: dir * 310, behavior: 'smooth' }); }
-        function exportData() { const d = {}; for(let i=0; i<localStorage.length; i++) { const k = localStorage.key(i); d[k] = localStorage.getItem(k); } const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(d)], {type: 'application/json'})); a.download = `life36_backup.json`; a.click(); }
-        function importData() { const inp = document.createElement('input'); inp.type = 'file'; inp.onchange = e => { const r = new FileReader(); r.onload = ev => { const d = JSON.parse(ev.target.result); Object.keys(d).forEach(k => localStorage.setItem(k, d[k])); location.reload(); }; r.readAsText(e.target.files[0]); }; inp.click(); }
-		
-		// 修改字體大小並記憶
-		function changeFontSize(size) {
-			// 1. 設定全域變數
-			document.documentElement.style.setProperty('--base-font-size', size);
-
-			// 2. 儲存設定
-			localStorage.setItem('user-font-size', size);
-
-			// 3. 更新按鈕視覺外觀 (移除所有 active 再加上目前的)
-			['90%', '100%', '120%'].forEach(s => {
-				const btn = document.getElementById('font-' + s.replace('%', ''));
-				if (btn) btn.classList.remove('font-btn-active');
-			});
-			const activeBtn = document.getElementById('font-' + size.replace('%', ''));
-			if (activeBtn) activeBtn.classList.add('font-btn-active');
-		}
-
-		// 確保網頁打開時自動讀取舊設定 (這段放在 updateDaily() 附近即可)
-		window.addEventListener('DOMContentLoaded', () => {
-			const savedSize = localStorage.getItem('user-font-size') || '100%';
-			changeFontSize(savedSize);
-		});
-
-        updateDaily();
-    </script>
+	    // 強制重設為「現在」的函數
+	    function resetToToday() {
+	        console.log("執行強制校準...");
+	        viewerDate = new Date();
+	        updateDaily();
+	        showPage('daily');
+	        
+	        // 標題回饋
+	        const h1 = document.querySelector('h1');
+	        if(h1) {
+	            h1.style.transition = '0.3s';
+	            h1.style.color = '#4CAF50';
+	            setTimeout(() => { h1.style.color = '#94a3b8'; }, 300);
+	        }
+	    }
+	
+	    function showPage(page) {
+	        ['daily', 'board', 'yearly', 'manage', 'about'].forEach(p => {
+	            const el = document.getElementById('page-'+p);
+	            if(el) el.classList.add('hidden');
+	            const nav = document.getElementById('nav-'+p);
+	            if(nav) nav.className = 'text-slate-400 text-[10px] font-bold uppercase tracking-widest';
+	        });
+	        document.getElementById('page-'+page).classList.remove('hidden');
+	        document.getElementById('nav-'+page).className = 'active-tab text-[10px] font-bold uppercase tracking-widest';
+	        
+	        if(page === 'yearly') renderYearly();
+	        if(page === 'manage') renderManagementList();
+	        if(page === 'board') { 
+	            initBoardSelect(); 
+	            const curId = getInfo(new Date()).id;
+	            document.getElementById('board-unit-select').value = curId; 
+	            renderBoard(parseInt(curId)); 
+	        }
+	    }
+	
+	    function updateDaily() {
+	        // 使用在地時間格式避免時差錯誤
+	        const y = viewerDate.getFullYear();
+	        const m = String(viewerDate.getMonth() + 1).padStart(2, '0');
+	        const d = String(viewerDate.getDate()).padStart(2, '0');
+	        const dateStr = `${y}-${m}-${d}`;
+	        
+	        document.getElementById('display-date').innerText = dateStr;
+	        const info = getInfo(viewerDate);
+	        document.getElementById('group-label').innerText = `UNIT ${info.id}`;
+	        document.getElementById('range-hint').innerText = `${info.s} ~ ${info.e}`;
+	        
+	        const qpArea = document.getElementById('quick-pick-area'); 
+	        if(qpArea){
+	            qpArea.innerHTML = '';
+	            getCommonItems().forEach(item => {
+	                const btn = document.createElement('button');
+	                btn.className = "text-[10px] px-3 py-1 bg-white border border-slate-100 rounded-full text-slate-400 hover:bg-green-50 shadow-sm transition-colors";
+	                btn.innerText = item;
+	                btn.onclick = () => { addTask(item); saveTasks(); };
+	                qpArea.appendChild(btn);
+	            });
+	        }
+	
+	        const list = document.getElementById('task-list'); list.innerHTML = '';
+	        const saved = JSON.parse(localStorage.getItem('tasks-' + dateStr) || '[]');
+	        saved.forEach(t => addTask(t.txt, t.done));
+	        const meta = JSON.parse(localStorage.getItem('meta-' + dateStr) || '{"mood":"✨"}');
+	        document.getElementById('mood-select').value = meta.mood;
+	    }
+	
+	    function addTask(txt = '', done = false) {
+	        const container = document.getElementById('task-list');
+	        const row = document.createElement('div');
+	        row.className = `flex items-center gap-4 p-4 rounded-2xl bg-white border border-slate-50 shadow-sm`;
+	        row.innerHTML = `<input type="checkbox" ${done ? 'checked' : ''} onchange="saveTasks(); updateRowStyle(this)" class="w-6 h-6 accent-green-600 cursor-pointer"><input type="text" value="${txt}" onblur="saveTasks()" placeholder="..." class="flex-1 text-sm outline-none bg-transparent font-bold ${done ? 'text-green-700' : 'text-slate-600'}"><button onclick="this.parentElement.remove(); saveTasks()" class="text-slate-200 hover:text-red-400 text-xs">✕</button>`;
+	        container.appendChild(row);
+	        if(done) updateRowStyle(row.querySelector('input[type="checkbox"]'));
+	    }
+	
+	    function saveTasks() {
+	        const y = viewerDate.getFullYear();
+	        const m = String(viewerDate.getMonth() + 1).padStart(2, '0');
+	        const d = String(viewerDate.getDate()).padStart(2, '0');
+	        const dateStr = `${y}-${m}-${d}`;
+	        const data = Array.from(document.querySelectorAll('#task-list > div')).map(r => ({
+	            txt: r.querySelector('input[type="text"]').value,
+	            done: r.querySelector('input[type="checkbox"]').checked
+	        })).filter(i => i.txt.trim() !== '');
+	        localStorage.setItem('tasks-' + dateStr, JSON.stringify(data));
+	    }
+	
+	    function updateRowStyle(el) { const r = el.parentElement; const i = r.querySelector('input[type="text"]'); if(el.checked){ r.classList.add('bg-green-50'); i.classList.add('text-green-700'); } else { r.classList.remove('bg-green-50'); i.classList.remove('text-green-700'); } }
+	
+	    function getInfo(date) {
+	        const m = date.getMonth()+1; const d = date.getDate(); const mmdd = (m<10?'0'+m:m)+'-'+(d<10?'0'+d:d);
+	        if(mmdd === '02-29') return {id: '⚡', s: '02-29', e: '02-29'};
+	        return plan.find(p => mmdd >= p.s && mmdd <= p.e) || {id: '🧘', s: '12-28', e: '12-31'};
+	    }
+	
+	    function saveMeta() { 
+	        const y = viewerDate.getFullYear();
+	        const m = String(viewerDate.getMonth() + 1).padStart(2, '0');
+	        const d = String(viewerDate.getDate()).padStart(2, '0');
+	        localStorage.setItem('meta-' + `${y}-${m}-${d}`, JSON.stringify({ mood: document.getElementById('mood-select').value })); 
+	    }
+	
+	    function changeDate(n) { viewerDate.setDate(viewerDate.getDate() + n); updateDaily(); }
+	
+	    function getCommonItems() { return JSON.parse(localStorage.getItem('common-tasks-36') || '["🧘 冥想", "💧 喝水", "📖 閱讀"]'); }
+	    function saveCommonItems(items) { localStorage.setItem('common-tasks-36', JSON.stringify(items)); }
+	    function renderManagementList() {
+	        const list = document.getElementById('common-management-list'); if(!list) return;
+	        list.innerHTML = '';
+	        getCommonItems().forEach((item, idx) => {
+	            const div = document.createElement('div');
+	            div.className = "flex justify-between items-center bg-slate-50 p-3 rounded-xl text-sm font-bold text-slate-600";
+	            div.innerHTML = `<span>${item}</span><button onclick="removeCommonItem(${idx})" class="text-red-300 hover:text-red-500">✕</button>`;
+	            list.appendChild(div);
+	        });
+	    }
+	    function addCommonItem() {
+	        const val = document.getElementById('new-common-input').value.trim();
+	        if(!val) return;
+	        const items = getCommonItems(); items.push(val);
+	        saveCommonItems(items); document.getElementById('new-common-input').value = '';
+	        renderManagementList();
+	    }
+	    function removeCommonItem(idx) { const items = getCommonItems(); items.splice(idx, 1); saveCommonItems(items); renderManagementList(); }
+	
+	    function changeFontSize(size) {
+	        document.documentElement.style.setProperty('--base-font-size', size);
+	        localStorage.setItem('user-font-size', size);
+	        ['90%', '100%', '120%'].forEach(s => {
+	            const btn = document.getElementById('font-' + s.replace('%', ''));
+	            if (btn) btn.classList.remove('font-btn-active');
+	        });
+	        const activeBtn = document.getElementById('font-' + size.replace('%', ''));
+	        if (activeBtn) activeBtn.classList.add('font-btn-active');
+	    }
+	
+	    function initBoardSelect() { const sel = document.getElementById('board-unit-select'); if(!sel || sel.options.length>0) return; plan.forEach(u => { const opt = document.createElement('option'); opt.value = u.id; opt.innerText = `Unit ${u.id<10?'0'+u.id:u.id} (${u.s} ~ ${u.e})`; sel.appendChild(opt); }); }
+	    
+	    function renderBoard(targetId) {
+	        const track = document.getElementById('board-track'); if(!track) return;
+	        track.innerHTML = '';
+	        const unit = plan.find(p => p.id === targetId); if(!unit) return;
+	        const s = new Date(new Date().getFullYear()+'-'+unit.s);
+	        const e = new Date(new Date().getFullYear()+'-'+unit.e);
+	        const days = Math.ceil((e-s)/86400000)+1;
+	        const todayStr = new Date().toLocaleDateString('en-CA');
+	        let todayEl = null;
+	        for(let i=0; i<days; i++) {
+	            const d = new Date(s); d.setDate(s.getDate()+i);
+	            const dStr = d.toLocaleDateString('en-CA');
+	            const tasks = JSON.parse(localStorage.getItem('tasks-'+dStr)||'[]');
+	            const meta = JSON.parse(localStorage.getItem('meta-'+dStr)||'{"mood":"✨"}');
+	            const col = document.createElement('div');
+	            col.className = `board-card card p-8 flex flex-col ${dStr===todayStr?'today-highlight':''}`;
+	            col.innerHTML = `<div class="text-center mb-6"><div class="text-[9px] font-black opacity-30 uppercase">Day ${i+1}</div><div class="text-lg font-bold text-slate-600">${dStr.substring(5).replace('-','/')}</div><div class="text-2xl mt-2">${meta.mood}</div></div><div class="space-y-2 flex-1 overflow-y-auto">${tasks.map(t=>`<div class="p-3 rounded-xl text-[11px] font-bold shadow-sm ${t.done?'board-item-done':'bg-slate-50 text-slate-400'}">${t.txt}</div>`).join('')}</div>`;
+	            track.appendChild(col);
+	            if(dStr===todayStr) todayEl = col;
+	        }
+	        setTimeout(() => { if(todayEl) todayEl.scrollIntoView({ behavior: 'smooth', inline: 'center' }); }, 100);
+	    }
+	
+	    function renderYearly() {
+	        const container = document.getElementById('grid-container'); if(!container) return;
+	        container.innerHTML = '';
+	        const curId = getInfo(new Date()).id;
+	        plan.forEach(u => {
+	            const goal = localStorage.getItem('goal-' + u.id) || '';
+	            const div = document.createElement('div');
+	            div.className = `card p-4 min-h-[8em] flex flex-col ${u.id === curId ? 'bg-green-50 border-green-200 shadow-md scale-105 z-10' : ''}`;
+	            div.innerHTML = `<div class="flex justify-between items-start mb-2"><div class="text-[0.65rem] font-black opacity-30 uppercase tracking-tighter">Unit ${u.id}</div><div class="text-[0.6rem] text-slate-400 font-mono">${u.s}-${u.e}</div></div><textarea onblur="localStorage.setItem('goal-${u.id}', this.value)" placeholder="..." class="w-full bg-transparent outline-none text-[0.8rem] leading-relaxed text-slate-600 flex-1 resize-none">${goal}</textarea>`;
+	            container.appendChild(div);
+	        });
+	    }
+	
+	    function scrollBoard(dir) { document.getElementById('board-viewport').scrollBy({ left: dir * 310, behavior: 'smooth' }); }
+	    function exportData() { const d = {}; for(let i=0; i<localStorage.length; i++) { const k = localStorage.key(i); d[k] = localStorage.getItem(k); } const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(d)], {type: 'application/json'})); a.download = `life_backup.json`; a.click(); }
+	    function importData() { const inp = document.createElement('input'); inp.type = 'file'; inp.onchange = e => { const r = new FileReader(); r.onload = ev => { const d = JSON.parse(ev.target.result); Object.keys(d).forEach(k => localStorage.setItem(k, d[k])); location.reload(); }; r.readAsText(e.target.files[0]); }; inp.click(); }
+	
+	    // 【啟動點】
+	    window.onload = function() {
+	        console.log("Life 啟動中...");
+	        
+	        // 1. 強制重設日期
+	        viewerDate = new Date();
+	        
+	        // 2. 標題綁定
+	        const title = document.querySelector('h1');
+	        if(title) title.onclick = resetToToday;
+	
+	        // 3. 字體讀取
+	        const savedSize = localStorage.getItem('user-font-size') || '100%';
+	        changeFontSize(savedSize);
+	
+	        // 4. 初次渲染
+	        updateDaily();
+	
+	        // 5. 喚醒監聽
+	        document.addEventListener("visibilitychange", () => {
+	            if (document.visibilityState === 'visible') resetToToday();
+	        });
+	    };
+	</script>
 </body>
 
 </html>
+
